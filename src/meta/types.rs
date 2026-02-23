@@ -1,0 +1,305 @@
+use std::{fmt, str::FromStr};
+
+/// GraphAr payload file format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum FileType {
+    /// CSV file format.
+    Csv,
+    /// Apache Parquet file format.
+    Parquet,
+    /// Apache ORC file format.
+    Orc,
+    /// JSON file format.
+    Json,
+}
+
+impl FileType {
+    /// Return the GraphAr canonical lowercase string.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Csv => "csv",
+            Self::Parquet => "parquet",
+            Self::Orc => "orc",
+            Self::Json => "json",
+        }
+    }
+}
+
+impl fmt::Display for FileType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for FileType {
+    type Err = crate::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let normalized = value.trim().to_ascii_lowercase();
+        match normalized.as_str() {
+            "csv" => Ok(Self::Csv),
+            "parquet" => Ok(Self::Parquet),
+            "orc" => Ok(Self::Orc),
+            "json" => Ok(Self::Json),
+            _ => Err(crate::Error::invalid_file_type(value.trim())),
+        }
+    }
+}
+
+/// GraphAr adjacency list layout type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
+pub enum AdjListType {
+    /// Unordered edges, partitioned by source id.
+    UnorderedBySource,
+    /// Unordered edges, partitioned by destination id.
+    UnorderedByDest,
+    /// Ordered edges by source id.
+    OrderedBySource,
+    /// Ordered edges by destination id.
+    OrderedByDest,
+}
+
+impl AdjListType {
+    /// Return the GraphAr canonical lowercase string.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::UnorderedBySource => "unordered_by_source",
+            Self::UnorderedByDest => "unordered_by_dest",
+            Self::OrderedBySource => "ordered_by_source",
+            Self::OrderedByDest => "ordered_by_dest",
+        }
+    }
+
+    /// Return whether this layout is ordered.
+    pub const fn is_ordered(self) -> bool {
+        match self {
+            Self::OrderedBySource | Self::OrderedByDest => true,
+            Self::UnorderedBySource | Self::UnorderedByDest => false,
+        }
+    }
+
+    /// Return the alignment key used by this layout: `"src"` or `"dst"`.
+    pub const fn aligned_by(self) -> &'static str {
+        match self {
+            Self::OrderedBySource | Self::UnorderedBySource => "src",
+            Self::OrderedByDest | Self::UnorderedByDest => "dst",
+        }
+    }
+}
+
+impl fmt::Display for AdjListType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for AdjListType {
+    type Err = crate::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let normalized = value.trim().to_ascii_lowercase();
+        match normalized.as_str() {
+            "unordered_by_source" => Ok(Self::UnorderedBySource),
+            "unordered_by_dest" => Ok(Self::UnorderedByDest),
+            "ordered_by_source" => Ok(Self::OrderedBySource),
+            "ordered_by_dest" => Ok(Self::OrderedByDest),
+            _ => Err(crate::Error::invalid_adj_list_type(value.trim())),
+        }
+    }
+}
+
+/// GraphAr info format version, rendered as `gar/vN`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Version(u32);
+
+impl Version {
+    /// Canonical GraphAr V1.
+    pub const V1: Self = Self(1);
+
+    /// Create a version from an integer value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value == 0`.
+    pub const fn new(value: u32) -> Self {
+        assert!(value > 0, "version must be greater than 0");
+        Self(value)
+    }
+
+    /// Try to create a version from an integer value.
+    pub fn try_new(value: u32) -> crate::Result<Self> {
+        if value == 0 {
+            return Err(crate::Error::invalid_version(value.to_string()));
+        }
+        Ok(Self(value))
+    }
+
+    /// Return the integer value of this version.
+    pub const fn value(self) -> u32 {
+        self.0
+    }
+}
+
+impl Default for Version {
+    fn default() -> Self {
+        Self::V1
+    }
+}
+
+impl TryFrom<u32> for Version {
+    type Error = crate::Error;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Self::try_new(value)
+    }
+}
+
+impl From<Version> for u32 {
+    fn from(value: Version) -> Self {
+        value.0
+    }
+}
+
+impl fmt::Display for Version {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "gar/v{}", self.0)
+    }
+}
+
+impl FromStr for Version {
+    type Err = crate::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let normalized = value.trim().to_ascii_lowercase();
+        let Some(number) = normalized.strip_prefix("gar/v") else {
+            return Err(crate::Error::invalid_version(value.trim()));
+        };
+
+        let parsed = number
+            .parse::<u32>()
+            .map_err(|_| crate::Error::invalid_version(value.trim()))?;
+        Self::try_new(parsed).map_err(|_| crate::Error::invalid_version(value.trim()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    fn assert_send_sync<T: Send + Sync>() {}
+
+    #[test]
+    fn file_type_roundtrip() {
+        for (raw, expected) in [
+            ("csv", FileType::Csv),
+            ("parquet", FileType::Parquet),
+            ("orc", FileType::Orc),
+            ("json", FileType::Json),
+        ] {
+            let parsed = FileType::from_str(raw).unwrap();
+            assert_eq!(parsed, expected);
+            assert_eq!(parsed.to_string(), raw);
+        }
+    }
+
+    #[test]
+    fn file_type_parse_invalid() {
+        let err = FileType::from_str("tsv").unwrap_err();
+        match err {
+            crate::Error::InvalidFileType { value } => assert_eq!(value.as_ref(), "tsv"),
+            _ => panic!("unexpected error variant"),
+        }
+    }
+
+    #[test]
+    fn adj_list_type_roundtrip() {
+        for (raw, expected, ordered, aligned_by) in [
+            (
+                "unordered_by_source",
+                AdjListType::UnorderedBySource,
+                false,
+                "src",
+            ),
+            (
+                "unordered_by_dest",
+                AdjListType::UnorderedByDest,
+                false,
+                "dst",
+            ),
+            (
+                "ordered_by_source",
+                AdjListType::OrderedBySource,
+                true,
+                "src",
+            ),
+            ("ordered_by_dest", AdjListType::OrderedByDest, true, "dst"),
+        ] {
+            let parsed = AdjListType::from_str(raw).unwrap();
+            assert_eq!(parsed, expected);
+            assert_eq!(parsed.to_string(), raw);
+            assert_eq!(parsed.is_ordered(), ordered);
+            assert_eq!(parsed.aligned_by(), aligned_by);
+        }
+    }
+
+    #[test]
+    fn adj_list_type_parse_invalid() {
+        let err = AdjListType::from_str("ordered_src").unwrap_err();
+        match err {
+            crate::Error::InvalidAdjListType { value } => assert_eq!(value.as_ref(), "ordered_src"),
+            _ => panic!("unexpected error variant"),
+        }
+    }
+
+    #[test]
+    fn version_roundtrip() {
+        let version = Version::from_str("gar/v1").unwrap();
+        assert_eq!(version, Version::V1);
+        assert_eq!(version.value(), 1);
+        assert_eq!(version.to_string(), "gar/v1");
+    }
+
+    #[test]
+    fn version_parse_invalid() {
+        for raw in ["v1", "gar/v0", "gar/vx"] {
+            let err = Version::from_str(raw).unwrap_err();
+            match err {
+                crate::Error::InvalidVersion { value } => assert_eq!(value.as_ref(), raw),
+                _ => panic!("unexpected error variant"),
+            }
+        }
+    }
+
+    #[test]
+    fn public_type_enums_are_send_sync() {
+        assert_send_sync::<FileType>();
+        assert_send_sync::<AdjListType>();
+        assert_send_sync::<Version>();
+    }
+
+    #[test]
+    fn version_default_is_v1() {
+        assert_eq!(Version::default(), Version::V1);
+    }
+
+    #[test]
+    #[should_panic(expected = "version must be greater than 0")]
+    fn version_new_rejects_zero() {
+        let _ = Version::new(0);
+    }
+
+    #[test]
+    fn version_try_from_is_fallible() {
+        assert_eq!(Version::try_from(1).unwrap(), Version::V1);
+
+        let err = Version::try_from(0).unwrap_err();
+        match err {
+            crate::Error::InvalidVersion { value } => assert_eq!(value.as_ref(), "0"),
+            _ => panic!("unexpected error variant"),
+        }
+    }
+}

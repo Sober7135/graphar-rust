@@ -1,14 +1,22 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+#![deny(missing_docs)]
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+//! Rust-native GraphAr core crate.
+//!
+//! This stage provides foundational metadata types used across later modules.
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+/// Unified error definitions used by currently implemented APIs.
+pub mod error;
+/// Core metadata identifiers and enums used across the crate.
+pub mod meta;
+
+pub use crate::error::Error;
+pub use crate::error::Result;
+pub use crate::meta::AdjListType;
+pub use crate::meta::EdgeLabel;
+pub use crate::meta::EdgeTriplet;
+pub use crate::meta::FileType;
+pub use crate::meta::GraphName;
+pub use crate::meta::PropertyName;
+pub use crate::meta::Version;
+pub use crate::meta::VertexId;
+pub use crate::meta::VertexLabel;
