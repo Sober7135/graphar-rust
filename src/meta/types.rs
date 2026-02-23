@@ -128,6 +128,14 @@ impl Version {
         Self(value)
     }
 
+    /// Try to create a version from an integer value.
+    pub fn try_new(value: u32) -> crate::Result<Self> {
+        if value == 0 {
+            return Err(crate::Error::invalid_version(value.to_string()));
+        }
+        Ok(Self(value))
+    }
+
     /// Return the integer value of this version.
     pub const fn value(self) -> u32 {
         self.0
@@ -140,9 +148,11 @@ impl Default for Version {
     }
 }
 
-impl From<u32> for Version {
-    fn from(value: u32) -> Self {
-        Self::new(value)
+impl TryFrom<u32> for Version {
+    type Error = crate::Error;
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Self::try_new(value)
     }
 }
 
@@ -170,10 +180,7 @@ impl FromStr for Version {
         let parsed = number
             .parse::<u32>()
             .map_err(|_| crate::Error::invalid_version(value.trim()))?;
-        if parsed == 0 {
-            return Err(crate::Error::invalid_version(value.trim()));
-        }
-        Ok(Self(parsed))
+        Self::try_new(parsed).map_err(|_| crate::Error::invalid_version(value.trim()))
     }
 }
 
@@ -283,5 +290,16 @@ mod tests {
     #[should_panic(expected = "version must be greater than 0")]
     fn version_new_rejects_zero() {
         let _ = Version::new(0);
+    }
+
+    #[test]
+    fn version_try_from_is_fallible() {
+        assert_eq!(Version::try_from(1).unwrap(), Version::V1);
+
+        let err = Version::try_from(0).unwrap_err();
+        match err {
+            crate::Error::InvalidVersion { value } => assert_eq!(value.as_ref(), "0"),
+            _ => panic!("unexpected error variant"),
+        }
     }
 }
