@@ -111,7 +111,7 @@ impl FromStr for AdjListType {
 }
 
 /// GraphAr info format version, rendered as `gar/vN`.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Version(u32);
 
 impl Version {
@@ -119,13 +119,24 @@ impl Version {
     pub const V1: Self = Self(1);
 
     /// Create a version from an integer value.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `value == 0`.
     pub const fn new(value: u32) -> Self {
+        assert!(value > 0, "version must be greater than 0");
         Self(value)
     }
 
     /// Return the integer value of this version.
     pub const fn value(self) -> u32 {
         self.0
+    }
+}
+
+impl Default for Version {
+    fn default() -> Self {
+        Self::V1
     }
 }
 
@@ -261,5 +272,16 @@ mod tests {
         assert_send_sync::<FileType>();
         assert_send_sync::<AdjListType>();
         assert_send_sync::<Version>();
+    }
+
+    #[test]
+    fn version_default_is_v1() {
+        assert_eq!(Version::default(), Version::V1);
+    }
+
+    #[test]
+    #[should_panic(expected = "version must be greater than 0")]
+    fn version_new_rejects_zero() {
+        let _ = Version::new(0);
     }
 }
