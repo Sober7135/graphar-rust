@@ -1,23 +1,30 @@
-use std::{error::Error as StdError, fmt};
-
 /// Unified error type for currently implemented core APIs.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Error {
     /// Invalid GraphAr file type string.
+    #[error("invalid file type: {value}")]
     InvalidFileType {
         /// Original parse input.
         value: Box<str>,
     },
     /// Invalid GraphAr adjacency list type string.
+    #[error("invalid adj list type: {value}")]
     InvalidAdjListType {
         /// Original parse input.
         value: Box<str>,
     },
     /// Invalid GraphAr version string.
+    #[error("invalid version: {value}")]
     InvalidVersion {
         /// Original parse input.
         value: Box<str>,
+    },
+    /// Invalid GraphAr metadata content.
+    #[error("invalid metadata: {message}")]
+    InvalidMetadata {
+        /// Actionable message that points to the invalid field or invariant.
+        message: Box<str>,
     },
 }
 
@@ -42,19 +49,14 @@ impl Error {
             value: value.into(),
         }
     }
-}
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidFileType { value } => write!(f, "invalid file type: {value}"),
-            Self::InvalidAdjListType { value } => write!(f, "invalid adj list type: {value}"),
-            Self::InvalidVersion { value } => write!(f, "invalid version: {value}"),
+    /// Create an `InvalidMetadata` error.
+    pub fn invalid_metadata(message: impl Into<Box<str>>) -> Self {
+        Self::InvalidMetadata {
+            message: message.into(),
         }
     }
 }
-
-impl StdError for Error {}
 
 /// Crate-wide result alias.
 pub type Result<T, E = Error> = core::result::Result<T, E>;
@@ -78,6 +80,10 @@ mod tests {
         assert_eq!(
             Error::invalid_version("gar/v0").to_string(),
             "invalid version: gar/v0"
+        );
+        assert_eq!(
+            Error::invalid_metadata("graph.vertices[0].chunk_size must be > 0").to_string(),
+            "invalid metadata: graph.vertices[0].chunk_size must be > 0"
         );
     }
 

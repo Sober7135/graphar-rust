@@ -5,3 +5,4 @@ name = "graphar-rust"
 version = "0.1.0"
 
 [dependencies]
+thiserror = "2"

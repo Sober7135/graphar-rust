@@ -89,7 +89,41 @@ string_newtype!(VertexLabel);
 string_newtype!(EdgeLabel);
 string_newtype!(PropertyName);
 
+/// A borrowed edge identifier triplet `(src, edge, dst)`.
+///
+/// This view avoids allocation when only borrowed labels are available.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EdgeTripletRef<'a> {
+    src: &'a str,
+    edge: &'a str,
+    dst: &'a str,
+}
+
+impl<'a> EdgeTripletRef<'a> {
+    /// Create a borrowed triplet from source label, edge label, and destination label.
+    pub const fn new(src: &'a str, edge: &'a str, dst: &'a str) -> Self {
+        Self { src, edge, dst }
+    }
+
+    /// Return the source vertex label.
+    pub const fn src(self) -> &'a str {
+        self.src
+    }
+
+    /// Return the edge label.
+    pub const fn edge(self) -> &'a str {
+        self.edge
+    }
+
+    /// Return the destination vertex label.
+    pub const fn dst(self) -> &'a str {
+        self.dst
+    }
+}
+
 /// A canonical edge identifier triplet `(src, edge, dst)`.
+///
+/// In artifacts, it maps to `src_type`/`edge_type`/`dst_type`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct EdgeTriplet {
     src: VertexLabel,
@@ -116,6 +150,27 @@ impl EdgeTriplet {
     /// Return the destination vertex label.
     pub fn dst(&self) -> &VertexLabel {
         &self.dst
+    }
+
+    /// Borrow this triplet as an [`EdgeTripletRef`].
+    pub fn as_triplet_ref(&self) -> EdgeTripletRef<'_> {
+        EdgeTripletRef::from(self)
+    }
+}
+
+impl<'a> From<&'a EdgeTriplet> for EdgeTripletRef<'a> {
+    fn from(value: &'a EdgeTriplet) -> Self {
+        Self::new(
+            value.src().as_str(),
+            value.edge().as_str(),
+            value.dst().as_str(),
+        )
+    }
+}
+
+impl fmt::Display for EdgeTripletRef<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}_{}_{}", self.src, self.edge, self.dst)
     }
 }
 
@@ -162,6 +217,16 @@ mod tests {
     }
 
     #[test]
+    fn edge_triplet_ref_roundtrip() {
+        let triplet = EdgeTriplet::new("person".into(), "knows".into(), "person".into());
+        let triplet_ref = triplet.as_triplet_ref();
+        assert_eq!(triplet_ref.src(), "person");
+        assert_eq!(triplet_ref.edge(), "knows");
+        assert_eq!(triplet_ref.dst(), "person");
+        assert_eq!(triplet_ref.to_string(), "person_knows_person");
+    }
+
+    #[test]
     fn public_id_types_are_send_sync() {
         assert_send_sync::<VertexId>();
         assert_send_sync::<GraphName>();
@@ -169,5 +234,6 @@ mod tests {
         assert_send_sync::<EdgeLabel>();
         assert_send_sync::<PropertyName>();
         assert_send_sync::<EdgeTriplet>();
+        assert_send_sync::<EdgeTripletRef<'static>>();
     }
 }

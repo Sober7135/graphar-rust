@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr};
+use std::fmt;
 
 /// GraphAr payload file format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -29,21 +29,6 @@ impl FileType {
 impl fmt::Display for FileType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for FileType {
-    type Err = crate::Error;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let normalized = value.trim().to_ascii_lowercase();
-        match normalized.as_str() {
-            "csv" => Ok(Self::Csv),
-            "parquet" => Ok(Self::Parquet),
-            "orc" => Ok(Self::Orc),
-            "json" => Ok(Self::Json),
-            _ => Err(crate::Error::invalid_file_type(value.trim())),
-        }
     }
 }
 
@@ -92,21 +77,6 @@ impl AdjListType {
 impl fmt::Display for AdjListType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
-    }
-}
-
-impl FromStr for AdjListType {
-    type Err = crate::Error;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let normalized = value.trim().to_ascii_lowercase();
-        match normalized.as_str() {
-            "unordered_by_source" => Ok(Self::UnorderedBySource),
-            "unordered_by_dest" => Ok(Self::UnorderedByDest),
-            "ordered_by_source" => Ok(Self::OrderedBySource),
-            "ordered_by_dest" => Ok(Self::OrderedByDest),
-            _ => Err(crate::Error::invalid_adj_list_type(value.trim())),
-        }
     }
 }
 
@@ -168,110 +138,57 @@ impl fmt::Display for Version {
     }
 }
 
-impl FromStr for Version {
-    type Err = crate::Error;
-
-    fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let normalized = value.trim().to_ascii_lowercase();
-        let Some(number) = normalized.strip_prefix("gar/v") else {
-            return Err(crate::Error::invalid_version(value.trim()));
-        };
-
-        let parsed = number
-            .parse::<u32>()
-            .map_err(|_| crate::Error::invalid_version(value.trim()))?;
-        Self::try_new(parsed).map_err(|_| crate::Error::invalid_version(value.trim()))
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use super::*;
 
     fn assert_send_sync<T: Send + Sync>() {}
 
     #[test]
     fn file_type_roundtrip() {
-        for (raw, expected) in [
-            ("csv", FileType::Csv),
-            ("parquet", FileType::Parquet),
-            ("orc", FileType::Orc),
-            ("json", FileType::Json),
+        for (value, expected) in [
+            (FileType::Csv, "csv"),
+            (FileType::Parquet, "parquet"),
+            (FileType::Orc, "orc"),
+            (FileType::Json, "json"),
         ] {
-            let parsed = FileType::from_str(raw).unwrap();
-            assert_eq!(parsed, expected);
-            assert_eq!(parsed.to_string(), raw);
-        }
-    }
-
-    #[test]
-    fn file_type_parse_invalid() {
-        let err = FileType::from_str("tsv").unwrap_err();
-        match err {
-            crate::Error::InvalidFileType { value } => assert_eq!(value.as_ref(), "tsv"),
-            _ => panic!("unexpected error variant"),
+            assert_eq!(value.to_string(), expected);
         }
     }
 
     #[test]
     fn adj_list_type_roundtrip() {
-        for (raw, expected, ordered, aligned_by) in [
+        for (value, expected, ordered, aligned_by) in [
             (
-                "unordered_by_source",
                 AdjListType::UnorderedBySource,
+                "unordered_by_source",
                 false,
                 "src",
             ),
             (
-                "unordered_by_dest",
                 AdjListType::UnorderedByDest,
+                "unordered_by_dest",
                 false,
                 "dst",
             ),
             (
-                "ordered_by_source",
                 AdjListType::OrderedBySource,
+                "ordered_by_source",
                 true,
                 "src",
             ),
-            ("ordered_by_dest", AdjListType::OrderedByDest, true, "dst"),
+            (AdjListType::OrderedByDest, "ordered_by_dest", true, "dst"),
         ] {
-            let parsed = AdjListType::from_str(raw).unwrap();
-            assert_eq!(parsed, expected);
-            assert_eq!(parsed.to_string(), raw);
-            assert_eq!(parsed.is_ordered(), ordered);
-            assert_eq!(parsed.aligned_by(), aligned_by);
-        }
-    }
-
-    #[test]
-    fn adj_list_type_parse_invalid() {
-        let err = AdjListType::from_str("ordered_src").unwrap_err();
-        match err {
-            crate::Error::InvalidAdjListType { value } => assert_eq!(value.as_ref(), "ordered_src"),
-            _ => panic!("unexpected error variant"),
+            assert_eq!(value.to_string(), expected);
+            assert_eq!(value.is_ordered(), ordered);
+            assert_eq!(value.aligned_by(), aligned_by);
         }
     }
 
     #[test]
     fn version_roundtrip() {
-        let version = Version::from_str("gar/v1").unwrap();
-        assert_eq!(version, Version::V1);
-        assert_eq!(version.value(), 1);
-        assert_eq!(version.to_string(), "gar/v1");
-    }
-
-    #[test]
-    fn version_parse_invalid() {
-        for raw in ["v1", "gar/v0", "gar/vx"] {
-            let err = Version::from_str(raw).unwrap_err();
-            match err {
-                crate::Error::InvalidVersion { value } => assert_eq!(value.as_ref(), raw),
-                _ => panic!("unexpected error variant"),
-            }
-        }
+        assert_eq!(Version::V1.value(), 1);
+        assert_eq!(Version::V1.to_string(), "gar/v1");
     }
 
     #[test]
